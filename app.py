@@ -3,16 +3,12 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import yfinance as yf
-
 from statsmodels.tsa.arima.model import ARIMA
-from sklearn.preprocessing import MinMaxScaler
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense
 
 # ---------------- PAGE CONFIG ----------------
-st.set_page_config(page_title="Advanced Stock Dashboard", layout="wide")
+st.set_page_config(page_title="Stock Dashboard", layout="wide")
 
-st.title("📊 Advanced Stock Analytics Dashboard")
+st.title("📊 Stock Analytics Dashboard (No TensorFlow)")
 
 # ---------------- SIDEBAR ----------------
 st.sidebar.header("⚙️ Settings")
@@ -147,54 +143,16 @@ try:
 
     st.pyplot(fig4)
 
+    # Forecast table
+    forecast_df = pd.DataFrame({
+        'Date': future_dates,
+        'Predicted Price': forecast
+    }).set_index('Date')
+
+    st.dataframe(forecast_df)
+
 except:
     st.warning("⚠️ ARIMA model failed")
-
-# ---------------- LSTM ----------------
-st.subheader("🤖 LSTM Prediction")
-
-try:
-    data = df[['Close']]
-    scaler = MinMaxScaler()
-    scaled = scaler.fit_transform(data)
-
-    train = scaled[:int(len(scaled)*0.8)]
-
-    X, y = [], []
-    for i in range(60, len(train)):
-        X.append(train[i-60:i])
-        y.append(train[i])
-
-    X, y = np.array(X), np.array(y)
-
-    model_lstm = Sequential()
-    model_lstm.add(LSTM(50, return_sequences=True, input_shape=(X.shape[1],1)))
-    model_lstm.add(LSTM(50))
-    model_lstm.add(Dense(1))
-
-    model_lstm.compile(optimizer='adam', loss='mean_squared_error')
-    model_lstm.fit(X, y, epochs=1, batch_size=32, verbose=0)
-
-    test = scaled[int(len(scaled)*0.8)-60:]
-    X_test = []
-
-    for i in range(60, len(test)):
-        X_test.append(test[i-60:i])
-
-    X_test = np.array(X_test)
-
-    preds = model_lstm.predict(X_test)
-    preds = scaler.inverse_transform(preds)
-
-    fig5, ax5 = plt.subplots()
-    ax5.plot(df.index[-len(preds):], preds, label='LSTM')
-    ax5.plot(df['Close'], label='Actual')
-    ax5.legend()
-
-    st.pyplot(fig5)
-
-except:
-    st.warning("⚠️ LSTM model failed (may need more data)")
 
 # ---------------- INSIGHTS ----------------
 st.subheader("🧠 Key Insights")
@@ -204,8 +162,7 @@ trend = "Uptrend 📈" if latest > avg else "Downtrend 📉"
 st.write(f"""
 - Trend: **{trend}**
 - Current price is {'above' if latest > avg else 'below'} average
-- Moving averages show market direction
+- Moving averages show trend direction
 - Buy/Sell signals indicate entry/exit points
-- ARIMA = short-term prediction
-- LSTM = deep learning prediction
+- ARIMA gives short-term prediction
 """)

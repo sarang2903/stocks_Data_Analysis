@@ -5,5 +5,4 @@ matplotlib
 yfinance
 statsmodels
 scikit-learn
-tensorflow
 plotly

@@ -12,7 +12,7 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error
 st.set_page_config(page_title="Advanced Stock Predictor", layout="wide")
 
 st.title("🚀 Advanced Stock Price Prediction Dashboard")
-st.write("Interactive stock analysis with multiple visualizations")
+st.write("Interactive stock analysis with insights")
 
 # Load data
 @st.cache_data
@@ -36,13 +36,23 @@ st_data = df[df['stock'] == selected_stock][['Close']]
 # Line chart
 st.subheader("📈 Price Trend")
 fig_line = px.line(st_data, y='Close', title='Stock Price Trend')
-st.plotly_chart(fig_line, use_container_width=True)
+st.plotly_chart(fig_line, use_container_width=True, config={'displayModeBar': False})
 
 # Returns
 st_data['Returns'] = st_data['Close'].pct_change()
 st_data.dropna(inplace=True)
 
-# Pie chart (Positive vs Negative days)
+# Key Insights
+st.subheader("💡 Key Insights")
+col1, col2, col3 = st.columns(3)
+col1.metric("Average Price", round(st_data['Close'].mean(), 2))
+col2.metric("Highest Price", round(st_data['Close'].max(), 2))
+col3.metric("Lowest Price", round(st_data['Close'].min(), 2))
+
+trend = "Uptrend 📈" if st_data['Close'].iloc[-1] > st_data['Close'].iloc[0] else "Downtrend 📉"
+st.info(f"Overall Trend: {trend}")
+
+# Pie chart
 pos_days = (st_data['Returns'] > 0).sum()
 neg_days = (st_data['Returns'] <= 0).sum()
 
@@ -52,9 +62,9 @@ pie_fig = px.pie(
     values=[pos_days, neg_days],
     title='Market Sentiment'
 )
-st.plotly_chart(pie_fig, use_container_width=True)
+st.plotly_chart(pie_fig, use_container_width=True, config={'displayModeBar': False})
 
-# Funnel chart (Price distribution)
+# Funnel chart
 st.subheader("🔻 Price Funnel Distribution")
 bins = pd.cut(st_data['Close'], bins=5)
 funnel_data = bins.value_counts().sort_index()
@@ -63,12 +73,12 @@ funnel_fig = go.Figure(go.Funnel(
     y=[str(i) for i in funnel_data.index],
     x=funnel_data.values
 ))
-st.plotly_chart(funnel_fig, use_container_width=True)
+st.plotly_chart(funnel_fig, use_container_width=True, config={'displayModeBar': False})
 
 # Histogram
 st.subheader("📊 Price Distribution")
 hist_fig = px.histogram(st_data, x='Close', nbins=30, title='Histogram of Prices')
-st.plotly_chart(hist_fig, use_container_width=True)
+st.plotly_chart(hist_fig, use_container_width=True, config={'displayModeBar': False})
 
 # Train model
 model = ARIMA(st_data['Close'], order=(5,1,0))
@@ -89,7 +99,7 @@ fig_pred = go.Figure()
 fig_pred.add_trace(go.Scatter(x=st_data.index, y=st_data['Close'], name='Actual'))
 fig_pred.add_trace(go.Scatter(x=pred_df.index, y=pred_df['Predicted'], name='Predicted'))
 
-st.plotly_chart(fig_pred, use_container_width=True)
+st.plotly_chart(fig_pred, use_container_width=True, config={'displayModeBar': False})
 
 # Metrics
 st.subheader("📏 Model Performance")

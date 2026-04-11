@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from statsmodels.tsa.arima.model import ARIMA
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 
@@ -33,11 +34,6 @@ forecast_days = st.sidebar.slider("Forecast Days", 1, 30, 10)
 # Filter data
 st_data = df[df['stock'] == selected_stock][['Close']]
 
-# Line chart
-st.subheader("📈 Price Trend")
-fig_line = px.line(st_data, y='Close', title='Stock Price Trend')
-st.plotly_chart(fig_line, use_container_width=True, config={'displayModeBar': False})
-
 # Returns
 st_data['Returns'] = st_data['Close'].pct_change()
 st_data.dropna(inplace=True)
@@ -52,54 +48,55 @@ col3.metric("Lowest Price", round(st_data['Close'].min(), 2))
 trend = "Uptrend 📈" if st_data['Close'].iloc[-1] > st_data['Close'].iloc[0] else "Downtrend 📉"
 st.info(f"Overall Trend: {trend}")
 
+# Prepare subplot figure
+st.subheader("📊 Combined Visualizations")
+fig = make_subplots(
+    rows=2, cols=2,
+    subplot_titles=("Price Trend", "Market Sentiment", "Price Distribution", "Prediction")
+)
+
+# Line chart
+fig.add_trace(
+    go.Scatter(x=st_data.index, y=st_data['Close'], name='Price'),
+    row=1, col=1
+)
+
 # Pie chart
 pos_days = (st_data['Returns'] > 0).sum()
 neg_days = (st_data['Returns'] <= 0).sum()
 
-st.subheader("🥧 Market Movement Distribution")
-pie_fig = px.pie(
-    names=['Positive Days', 'Negative Days'],
-    values=[pos_days, neg_days],
-    title='Market Sentiment'
+fig.add_trace(
+    go.Pie(labels=['Positive', 'Negative'], values=[pos_days, neg_days], showlegend=False),
+    row=1, col=2
 )
-st.plotly_chart(pie_fig, use_container_width=True, config={'displayModeBar': False})
-
-# Funnel chart
-st.subheader("🔻 Price Funnel Distribution")
-bins = pd.cut(st_data['Close'], bins=5)
-funnel_data = bins.value_counts().sort_index()
-
-funnel_fig = go.Figure(go.Funnel(
-    y=[str(i) for i in funnel_data.index],
-    x=funnel_data.values
-))
-st.plotly_chart(funnel_fig, use_container_width=True, config={'displayModeBar': False})
 
 # Histogram
-st.subheader("📊 Price Distribution")
-hist_fig = px.histogram(st_data, x='Close', nbins=30, title='Histogram of Prices')
-st.plotly_chart(hist_fig, use_container_width=True, config={'displayModeBar': False})
+fig.add_trace(
+    go.Histogram(x=st_data['Close'], nbinsx=30, name='Histogram'),
+    row=2, col=1
+)
 
 # Train model
 model = ARIMA(st_data['Close'], order=(5,1,0))
 model_fit = model.fit()
 forecast = model_fit.forecast(steps=forecast_days)
 
-# Future dates
 future_dates = pd.date_range(start=st_data.index[-1], periods=forecast_days+1, freq='B')[1:]
 
-# Prediction chart
-st.subheader("🔮 Prediction")
-pred_df = pd.DataFrame({
-    'Date': future_dates,
-    'Predicted': forecast
-}).set_index('Date')
+# Prediction
+fig.add_trace(
+    go.Scatter(x=st_data.index, y=st_data['Close'], name='Actual'),
+    row=2, col=2
+)
+fig.add_trace(
+    go.Scatter(x=future_dates, y=forecast, name='Predicted'),
+    row=2, col=2
+)
 
-fig_pred = go.Figure()
-fig_pred.add_trace(go.Scatter(x=st_data.index, y=st_data['Close'], name='Actual'))
-fig_pred.add_trace(go.Scatter(x=pred_df.index, y=pred_df['Predicted'], name='Predicted'))
+# Layout
+fig.update_layout(height=700, showlegend=True)
 
-st.plotly_chart(fig_pred, use_container_width=True, config={'displayModeBar': False})
+st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
 # Metrics
 st.subheader("📏 Model Performance")
@@ -122,5 +119,6 @@ if st.checkbox("Show Raw Data"):
     st.write(st_data.tail())
 
 # Download
+pred_df = pd.DataFrame({'Date': future_dates, 'Predicted': forecast}).set_index('Date')
 csv = pred_df.to_csv().encode('utf-8')
 st.download_button("📥 Download Predictions", csv, "predictions.csv", "text/csv")

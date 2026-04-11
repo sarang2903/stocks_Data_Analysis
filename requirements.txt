@@ -5,3 +5,4 @@ statsmodels
 numpy
 plotly
 scikit-learn
+yfinance

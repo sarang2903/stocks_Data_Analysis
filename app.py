@@ -3,48 +3,33 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import yfinance as yf
+
 from statsmodels.tsa.arima.model import ARIMA
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense
 
-# ---------------- PAGE CONFIG ----------------
-st.set_page_config(page_title="Stock Dashboard", layout="wide")
+# Page config
+st.set_page_config(page_title="Advanced Stock Dashboard", layout="wide")
 
-st.title("📊 Stock Analytics Dashboard (No TensorFlow)")
+st.title("📊 Advanced Stock Analytics Dashboard")
 
-# ---------------- SIDEBAR ----------------
+# Sidebar
 st.sidebar.header("⚙️ Settings")
 
-stock = st.sidebar.text_input("Enter Stock Symbol", "RELIANCE.NS")
-compare_stock = st.sidebar.text_input("Compare With", "TCS.NS")
+stock = st.sidebar.text_input("Enter Stock Symbol (e.g. RELIANCE.NS)", "RELIANCE.NS")
+compare_stock = st.sidebar.text_input("Compare With (optional)", "TCS.NS")
 forecast_days = st.sidebar.slider("Forecast Days", 1, 30, 10)
 
-# ---------------- LOAD DATA ----------------
+# ---------------- LIVE DATA ----------------
 @st.cache_data
 def load_data(stock):
     df = yf.download(stock, period="2y")
-    df.dropna(inplace=True)
     return df
 
 df = load_data(stock)
 
-# Safety check
-if df.empty:
-    st.error("❌ No data found. Check stock symbol.")
-    st.stop()
-
-# ---------------- KPI ----------------
-latest = df['Close'].iloc[-1]
-avg = df['Close'].mean()
-high = df['Close'].max()
-low = df['Close'].min()
-
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Latest Price", round(latest,2))
-c2.metric("Average Price", round(avg,2))
-c3.metric("Max Price", round(high,2))
-c4.metric("Min Price", round(low,2))
-
-# ---------------- LINE CHART ----------------
-st.subheader("📈 Price Trend")
+st.subheader(f"📈 {stock} Stock Data")
 st.line_chart(df['Close'])
 
 # ---------------- CANDLESTICK ----------------
@@ -63,16 +48,15 @@ st.plotly_chart(fig, use_container_width=True)
 
 # ---------------- MULTI STOCK ----------------
 if compare_stock:
-    try:
-        df2 = load_data(compare_stock)
-        compare_df = pd.DataFrame({
-            stock: df['Close'],
-            compare_stock: df2['Close']
-        })
-        st.subheader("📊 Stock Comparison")
-        st.line_chart(compare_df)
-    except:
-        st.warning("⚠️ Comparison stock not found")
+    df2 = load_data(compare_stock)
+    st.subheader("📊 Stock Comparison")
+
+    compare_df = pd.DataFrame({
+        stock: df['Close'],
+        compare_stock: df2['Close']
+    })
+
+    st.line_chart(compare_df)
 
 # ---------------- MOVING AVERAGE ----------------
 st.subheader("📊 Moving Averages")
@@ -85,13 +69,14 @@ ax1.plot(df['Close'], label='Close')
 ax1.plot(df['MA20'], label='MA20')
 ax1.plot(df['MA50'], label='MA50')
 ax1.legend()
+
 st.pyplot(fig1)
 
 # ---------------- BUY/SELL SIGNAL ----------------
 st.subheader("💡 Buy/Sell Signals")
 
 df['Signal'] = 0
-df.loc[20:, 'Signal'] = np.where(df['MA20'][20:] > df['MA50'][20:], 1, 0)
+df['Signal'][20:] = np.where(df['MA20'][20:] > df['MA50'][20:], 1, 0)
 df['Position'] = df['Signal'].diff()
 
 fig2, ax2 = plt.subplots()
@@ -106,63 +91,80 @@ ax2.plot(sell.index, sell['Close'], 'v', markersize=10, label='Sell')
 ax2.legend()
 st.pyplot(fig2)
 
-# ---------------- MONTHLY BAR GRAPH (FIXED) ----------------
-st.subheader("📊 Monthly Average Price")
-
-df_copy = df.copy()
-df_copy.index = pd.to_datetime(df_copy.index)
-df_copy = df_copy.sort_index()
-
-monthly = df_copy['Close'].resample('ME').mean()
-
-st.bar_chart(monthly)
-
-# ---------------- RETURNS ----------------
-st.subheader("📉 Daily Returns")
-
-df['Returns'] = df['Close'].pct_change()
-
-fig3, ax3 = plt.subplots()
-df['Returns'].hist(bins=50, ax=ax3)
-st.pyplot(fig3)
-
 # ---------------- ARIMA ----------------
 st.subheader("🔮 ARIMA Forecast")
 
-try:
-    model = ARIMA(df['Close'], order=(5,1,0))
-    model_fit = model.fit()
-    forecast = model_fit.forecast(steps=forecast_days)
+model = ARIMA(df['Close'], order=(5,1,0))
+model_fit = model.fit()
+forecast = model_fit.forecast(steps=forecast_days)
 
-    future_dates = pd.date_range(start=df.index[-1], periods=forecast_days+1, freq='B')[1:]
+future_dates = pd.date_range(start=df.index[-1], periods=forecast_days+1, freq='B')[1:]
 
-    fig4, ax4 = plt.subplots()
-    ax4.plot(df['Close'], label='Actual')
-    ax4.plot(future_dates, forecast, linestyle='dashed', label='Forecast')
-    ax4.legend()
+fig3, ax3 = plt.subplots()
+ax3.plot(df['Close'], label='Actual')
+ax3.plot(future_dates, forecast, linestyle='dashed', label='Forecast')
+ax3.legend()
 
-    st.pyplot(fig4)
+st.pyplot(fig3)
 
-    # Forecast table
-    forecast_df = pd.DataFrame({
-        'Date': future_dates,
-        'Predicted Price': forecast
-    }).set_index('Date')
+# ---------------- LSTM MODEL ----------------
+st.subheader("🤖 LSTM Deep Learning Prediction")
 
-    st.dataframe(forecast_df)
+data = df[['Close']]
+scaler = MinMaxScaler()
+scaled_data = scaler.fit_transform(data)
 
-except:
-    st.warning("⚠️ ARIMA model failed")
+train_data = scaled_data[:int(len(scaled_data)*0.8)]
+
+X_train = []
+y_train = []
+
+for i in range(60, len(train_data)):
+    X_train.append(train_data[i-60:i])
+    y_train.append(train_data[i])
+
+X_train, y_train = np.array(X_train), np.array(y_train)
+
+model_lstm = Sequential()
+model_lstm.add(LSTM(50, return_sequences=True, input_shape=(X_train.shape[1],1)))
+model_lstm.add(LSTM(50))
+model_lstm.add(Dense(1))
+
+model_lstm.compile(optimizer='adam', loss='mean_squared_error')
+
+model_lstm.fit(X_train, y_train, epochs=2, batch_size=32, verbose=0)
+
+# Prediction
+test_data = scaled_data[int(len(scaled_data)*0.8)-60:]
+X_test = []
+
+for i in range(60, len(test_data)):
+    X_test.append(test_data[i-60:i])
+
+X_test = np.array(X_test)
+
+predictions = model_lstm.predict(X_test)
+predictions = scaler.inverse_transform(predictions)
+
+fig4, ax4 = plt.subplots()
+ax4.plot(df.index[-len(predictions):], predictions, label='LSTM Prediction')
+ax4.plot(df['Close'], label='Actual')
+ax4.legend()
+
+st.pyplot(fig4)
 
 # ---------------- INSIGHTS ----------------
-st.subheader("🧠 Key Insights")
+st.subheader("🧠 Smart Insights")
+
+latest = df['Close'].iloc[-1]
+avg = df['Close'].mean()
 
 trend = "Uptrend 📈" if latest > avg else "Downtrend 📉"
 
 st.write(f"""
 - Trend: **{trend}**
-- Current price is {'above' if latest > avg else 'below'} average
-- Moving averages show trend direction
-- Buy/Sell signals indicate entry/exit points
-- ARIMA gives short-term prediction
+- Price is {'above' if latest > avg else 'below'} average
+- Buy signals indicate potential entry points
+- ARIMA = short-term prediction
+- LSTM = deep learning prediction (more powerful)
 """)

@@ -1,9 +1,6 @@
-# app.py
-
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from statsmodels.tsa.arima.model import ARIMA
@@ -38,9 +35,12 @@ st_data = df[df['stock'] == selected_stock][['Close']]
 st_data['Returns'] = st_data['Close'].pct_change()
 st_data.dropna(inplace=True)
 
-# Key Insights
+# =======================
+# 💡 Key Insights
+# =======================
 st.subheader("💡 Key Insights")
 col1, col2, col3 = st.columns(3)
+
 col1.metric("Average Price", round(st_data['Close'].mean(), 2))
 col2.metric("Highest Price", round(st_data['Close'].max(), 2))
 col3.metric("Lowest Price", round(st_data['Close'].min(), 2))
@@ -48,46 +48,55 @@ col3.metric("Lowest Price", round(st_data['Close'].min(), 2))
 trend = "Uptrend 📈" if st_data['Close'].iloc[-1] > st_data['Close'].iloc[0] else "Downtrend 📉"
 st.info(f"Overall Trend: {trend}")
 
-# Prepare subplot figure
-st.subheader("📊 Combined Visualizations")
+# =======================
+# 📊 Subplots (FIXED)
+# =======================
 fig = make_subplots(
     rows=2, cols=2,
+    specs=[
+        [{"type": "xy"}, {"type": "domain"}],
+        [{"type": "xy"}, {"type": "xy"}]
+    ],
     subplot_titles=("Price Trend", "Market Sentiment", "Price Distribution", "Prediction")
 )
 
-# Line chart
+# 📈 Line Chart
 fig.add_trace(
     go.Scatter(x=st_data.index, y=st_data['Close'], name='Price'),
     row=1, col=1
 )
 
-# Pie chart
+# 🥧 Pie Chart
 pos_days = (st_data['Returns'] > 0).sum()
 neg_days = (st_data['Returns'] <= 0).sum()
 
 fig.add_trace(
-    go.Pie(labels=['Positive', 'Negative'], values=[pos_days, neg_days], showlegend=False),
+    go.Pie(labels=['Positive', 'Negative'], values=[pos_days, neg_days]),
     row=1, col=2
 )
 
-# Histogram
+# 📊 Histogram
 fig.add_trace(
     go.Histogram(x=st_data['Close'], nbinsx=30, name='Histogram'),
     row=2, col=1
 )
 
-# Train model
+# =======================
+# 🔮 Prediction
+# =======================
 model = ARIMA(st_data['Close'], order=(5,1,0))
 model_fit = model.fit()
 forecast = model_fit.forecast(steps=forecast_days)
 
 future_dates = pd.date_range(start=st_data.index[-1], periods=forecast_days+1, freq='B')[1:]
 
-# Prediction
+# Actual
 fig.add_trace(
     go.Scatter(x=st_data.index, y=st_data['Close'], name='Actual'),
     row=2, col=2
 )
+
+# Predicted
 fig.add_trace(
     go.Scatter(x=future_dates, y=forecast, name='Predicted'),
     row=2, col=2
@@ -98,8 +107,11 @@ fig.update_layout(height=700, showlegend=True)
 
 st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
-# Metrics
+# =======================
+# 📏 Model Performance
+# =======================
 st.subheader("📏 Model Performance")
+
 train = st_data['Close'][:-forecast_days]
 test = st_data['Close'][-forecast_days:]
 
@@ -114,11 +126,16 @@ col1, col2 = st.columns(2)
 col1.metric("RMSE", round(rmse, 2))
 col2.metric("MAE", round(mae, 2))
 
-# Show data
+# =======================
+# 📂 Raw Data
+# =======================
 if st.checkbox("Show Raw Data"):
     st.write(st_data.tail())
 
-# Download
+# =======================
+# 📥 Download
+# =======================
 pred_df = pd.DataFrame({'Date': future_dates, 'Predicted': forecast}).set_index('Date')
 csv = pred_df.to_csv().encode('utf-8')
+
 st.download_button("📥 Download Predictions", csv, "predictions.csv", "text/csv")
